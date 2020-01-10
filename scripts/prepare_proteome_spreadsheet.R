@@ -32,4 +32,25 @@ proteome %>%
   arrange(gene) %>% 
   write_tsv(outfile)
 
+new_sample_label <- proteome %>% 
+  select(`Majority protein IDs`,`Protein names`,gene,sample,segment,copy_number) %>% 
+  distinct(sample,segment) %>% 
+  group_by(segment) %>% 
+  mutate(n=row_number()) %>% 
+  unite("new_sample_label", segment,n,sep = "_")
 
+full_individual_data <- proteome %>% 
+  arrange(segment) %>% 
+  select(`Majority protein IDs`,`Protein names`,gene,sample,copy_number) %>% 
+  pivot_wider(names_from = sample,values_from = copy_number) 
+  
+new_column_names <- full_individual_data %>% 
+  colnames() %>% 
+  enframe(name = NULL) %>% 
+  left_join(new_sample_label, by=c("value" = "sample")) %>% 
+  mutate(new_sample_label = if_else(is.na(new_sample_label),value,new_sample_label)) %>% 
+  pull(new_sample_label)
+
+colnames(full_individual_data) <- new_column_names
+
+write_tsv(full_individual_data, snakemake@output[[2]])

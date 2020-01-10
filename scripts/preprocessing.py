@@ -7,7 +7,7 @@ from pathlib import Path
 from Bio import SeqIO
 import re
 
-# Constants
+# Constants 
 AVOGADRO = 6.022140857e23
 BASEPAIR_WEIGHT = 615.8771
 RAT_GENOME_SIZE = 2870184193 # Rnor_6.0 https://rgd.mcw.edu/rgdweb/report/genomeInformation/genomeInformation.html
@@ -23,7 +23,7 @@ def cleanup_pg(df ,site = True, rev = True, con = True, iRT = True):
     Remove 'Only identified by site', 'Reverse', or 'Potential contaminant' from proteinGroups.
     '''
     tmp_df = df.copy()
-
+    
     if site:
         tmp_df = tmp_df[tmp_df['Only identified by site'].isna()]
         tmp_df.drop('Only identified by site', axis = 1, inplace = True)
@@ -43,10 +43,10 @@ def cleanup_pg(df ,site = True, rev = True, con = True, iRT = True):
 def convert_mw(df):
     """Convert MW from kDa to Da (*1000)"""
     df['Mol. weight [Da]'] = df['Mol. weight [kDa]'] * 1000
-
+    
 def add_detectability(df, col=None):
     """Add detectability factor by specified a column in df (e.g., number of theoretical peptides). If no column is given or not found in df, assign 'Mol. weight [Da]' instead. (REQUIRED conversion of MW from kDa to Da first!!)"""
-
+    
     if col == None:
         df['detectability_factor'] = df['Mol. weight [Da]']
     else:
@@ -57,7 +57,7 @@ def add_detectability(df, col=None):
         else:
             print('!!No specified detectability column found!!')
             df['detectability_factor'] = df['Mol. weight [Da]']
-
+    
 def check_histone(df, histone):
     """Add a new column indicating whether that protein match to histone UniProt Acc. [Return as a new DataFrame]"""
     tmp = df.copy()
@@ -74,24 +74,28 @@ def copy_number(df, expression_cols):
     """Calculate copy number of each protein."""
     histone_index = df[df['Histone'] == True].index
     tmp = df.copy()
-
+    
     for sample in expression_cols:
         sum_mw_histone = 'sum_mw_histone_' + sample
         factor_histone = 'factor_histone_' + sample
         sum_mw = 'sum_mw_' + sample
-
-        copy_num_histone = 'copy_number_histone_' + sample
+        #factor_total_protein = 'factor_total_protein_' + sample
+        #copy_num_tpa = 'copy_number_tpa_' + sample
+        copy_num_histone = 'copy_number_histone_' + sample   
 
         tmp[sum_mw_histone] = (tmp['Mol. weight [Da]'] / tmp['detectability_factor'] * tmp[sample])[histone_index].sum()
-
+        #tmp[sum_mw] = (tmp['Mol. weight [Da]'] / tmp['detectability_factor'] * tmp[sample]).sum()
+        
         # C_VALUE * PLOIDY is amount of DNA per cell [in gram], which assume to be equal to histone mass
         tmp[factor_histone] = C_VALUE * PLOIDY * AVOGADRO / tmp[sum_mw_histone]
+        #tmp[factor_total_protein] = (TOTAL_PROTEIN_PER_CELL * 1e-12 * AVOGADRO / tmp[sum_mw])
         tmp[copy_num_histone] = tmp[sample] * tmp[factor_histone] / tmp['detectability_factor']
+        #tmp[copy_num_tpa] = (tmp[sample] * tmp[factor_total_protein] / tmp['Mol. weight [Da]'])
     return tmp
 
 
 def get_genename(acc, email, cols='id,reviewed,genes(PREFERRED),genes'):
-
+    
     url = 'https://www.uniprot.org/uploadlists/'
     params = {
     'from':'ACC',
@@ -101,14 +105,14 @@ def get_genename(acc, email, cols='id,reviewed,genes(PREFERRED),genes'):
     'query':acc
     }
     current_time = datetime.now()
-
+    
     data = urllib.parse.urlencode(params).encode('UTF-8')
     request = urllib.request.Request(url, data)
     contact = email # Please set a contact email address here to help us debug in case of problems (see https://www.uniprot.org/help/privacy).
     request.add_header('User-Agent', 'Python %s' % contact)
     response = urllib.request.urlopen(request)
     page = response.read().decode('UTF-8')
-
+    
     df = pd.read_csv(StringIO(page), sep = '\t')
     if df['Gene names'].isna().all():
         print('No gene name found!!')
@@ -119,25 +123,25 @@ def get_genename(acc, email, cols='id,reviewed,genes(PREFERRED),genes'):
             return df[['Entry','Status', 'Gene names  (primary )', 'Gene names']].fillna('')
         else:
             return df.fillna('')
-
-
+    
+    
 def id_to_gene(accs):
     try:
         return ';'.join(list(dict.fromkeys(' '.join([gene_dict[acc] for acc in accs.split(';')]).split())))
     except(KeyError):
         return ''
-
-
+    
+    
 def update_genes(data, email):
-
+    
     """A function to convert UniProt accession (from data['Majority protein IDs']) to gene name. For each entry in proteinGroup, the "preferred gene name" is chosen from the UniProt entry which is in SwissProt database (first entry will be used if multiple SwissProt entries available). If no "preferred gene name" from SwissProt entry found, the first "preferred gene name" is used instead. If no "preferred gene name" available, 'Gene names' reported from MaxQuant will be used.
-
+        
     # Parameters
     - data: A dataframe imported from MaxQuant's "proteinGroups.txt" output file.
     - email: User email address for requesting data from UniProt.
-
+    
     # Return
-    - A new dataframe copied from data with additional columns:
+    - A new dataframe copied from data with additional columns: 
         'reviewed'          :  Specify if any accession is in SwissProt (logical)
         'preferred_gene'    :  SwissProt preferred gene name
         'sec_pref_gene'     :  First preferred gene name in each row
@@ -161,12 +165,12 @@ def update_genes(data, email):
 
 
 def export_csv(df, filename, out, experiment_name, additional_cols=None):
-
+    
     """
     Export processed data to csv.
     ...
     """
-
+    
     #out = Path('output/')
     try:
         Path.mkdir(out)
@@ -174,7 +178,7 @@ def export_csv(df, filename, out, experiment_name, additional_cols=None):
     except(FileExistsError):
         print('Output folder already exists.')
     out_file = Path.joinpath(out,filename)
-
+    
     copy_number_cols = [col for col in df.columns if col.startswith('copy')]
 
     export_cols = ['Majority protein IDs',
@@ -188,26 +192,26 @@ def export_csv(df, filename, out, experiment_name, additional_cols=None):
                   'Histone']
     if(additional_cols):
         export_cols = export_cols + additional_cols
-
+        
     df[export_cols].to_csv(out_file, index=False)
     print(f'Data exported to: {out_file.absolute()}')
     return None
 
 
 def digest(protein_seq, cut_pattern = "[KR]", misscleavage = 0):
-
+    
     """
     In silico digestion of protein(s)
     """
-
-
+        
+        
     cut_sites = [-1]
     start = 0
     for site in re.finditer(cut_pattern, protein_seq):
         cut_sites.append(site.span()[0])
     cut_sites.append(len(protein_seq)-1)
     digested_peptides = [protein_seq[cut_sites[i]+1:cut_sites[i+1]+1] for i in range(len(cut_sites)-1)]
-
+    
     if misscleavage == 0:
         return(digested_peptides)
     elif misscleavage == 1:
@@ -222,6 +226,8 @@ def digest(protein_seq, cut_pattern = "[KR]", misscleavage = 0):
         digested_peptides_miss1 = list(map("".join, zip(digested_peptides[:-1],digested_peptides[1:])))
         digested_peptides_miss2 = list(map("".join, zip(digested_peptides[:-2],digested_peptides[1:-1],digested_peptides[2:])))
         return(digested_peptides + digested_peptides_miss1 + digested_peptides_miss2)
-
-
+    
+    
+    
+    
     

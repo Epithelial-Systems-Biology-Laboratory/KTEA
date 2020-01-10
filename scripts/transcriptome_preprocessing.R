@@ -1,6 +1,10 @@
 library(readxl)
 library(tidyverse)
 
+# transcriptome <- read_excel("Rat_transcriptome.xlsx", sheet = "Median for each segment", skip = 7)[,1:15] %>%
+#   gather(segment, rpkm, c(2:15)) %>%
+#   mutate(log_rpkm = log2(rpkm + 1))
+
 
 tubule_segments <- c("S1",
                      "S2",
@@ -25,21 +29,21 @@ download.file("https://helixweb.nih.gov/ESBL/Database/NephronRNAseq/Supplemental
 
 transcriptome <- read_excel(tmpfile,sheet = "Median for each segment", skip = 7) %>%
   dplyr::select(-c("Maximum", "Variance", "Annotation")) %>%
-  mutate_if(is.numeric, ~na_if(.x,0)) %>%
-  filter_if(is.numeric, any_vars(!is.na(.))) %>%
+  mutate_if(is.numeric, ~na_if(.x,0)) %>% 
+  filter_if(is.numeric, any_vars(!is.na(.))) %>% 
   gather(segment, rpkm, -`Gene Symbol`) %>%
-  group_by(`Gene Symbol`, segment) %>%
-  summarise(rpkm=sum(rpkm)) %>%
-  ungroup() %>%
-  mutate(rpkm = replace_na(rpkm, 0)) %>%
+  group_by(`Gene Symbol`, segment) %>% 
+  summarise(rpkm=sum(rpkm)) %>% 
+  ungroup() %>% 
+  mutate(rpkm = replace_na(rpkm, 0)) %>% 
   mutate(log2_rpkm_plus_one = log2(rpkm + 1),
-         segment=str_remove(segment," .*")) %>%
-  mutate(segment = fct_relevel(segment, tubule_segments)) %>%
-  rename(Gene_symbol=`Gene Symbol`) %>%
-  arrange(Gene_symbol, segment) %>%
+         segment=str_remove(segment," .*")) %>% 
+  mutate(segment = fct_relevel(segment, tubule_segments)) %>% 
+  rename(Gene_symbol=`Gene Symbol`) %>% 
+  arrange(Gene_symbol, segment) %>% 
   mutate(segment = fct_recode(segment,
-                              DTL1="SDL",
-                              DTL2="LDLOM",
+                              DTL1="SDL", 
+                              DTL2="LDLOM", 
                               DTL3="LDLIM",
                               ATL="tAL")) # Rename segment to new nomenclature https://doi.org/10.1681/ASN.2019040415
 
@@ -51,7 +55,9 @@ transcriptome <- transcriptome %>%
          rpkm = na_if(rpkm, 0),
          rank = rank(rpkm, ties.method = "min"),
          percentile = replace_na(percent_rank(rpkm),0)) %>%
-  mutate(rpkm = replace_na(rpkm, 0)) %>%
+  mutate(rpkm = replace_na(rpkm, 0)) %>% 
   ungroup()
 
+#tmp <- (transcriptome %>% filter(rpkm != 0) %>% group_by(segment) %>% mutate(percentile_rank = rank(rpkm)/length(rpkm)))[,c(1,2,9)]
+#transcriptome <- right_join(tmp, transcriptome)  %>% replace_na(list(percentile_rank = 0))
 write_csv(transcriptome, out_file)
